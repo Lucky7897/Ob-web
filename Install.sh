@@ -1,4 +1,4 @@
-#!/bin/bash
+​#!/bin/bash
 
 # Define color codes for better visual feedback
 RED='\033[0;31m'
@@ -16,8 +16,6 @@ LOG_DIR="/var/log/ob-web"
 DATA_DIR="/var/lib/ob-web"
 BACKUP_DIR="/var/backup/ob-web"
 REPO_URL="https://github.com/Lucky7897/Ob-web"
-DOTNET_VERSION="6.0"
-OB2_TOOL_URL="https://example.com/ob2-web-tool.zip"
 
 # Log file setup
 LOG_FILE="/var/log/ob-web-install.log"
@@ -132,37 +130,6 @@ install_dependencies() {
     pip install flask werkzeug pyjwt gunicorn
     
     log "${GREEN}Dependencies installed successfully.${NC}"
-}
-
-# Install .NET SDK
-install_dotnet() {
-    log "Installing .NET SDK..."
-    
-    if command -v apt-get &> /dev/null; then
-        wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-        dpkg -i packages-microsoft-prod.deb
-        apt-get update
-        apt-get install -y dotnet-sdk-$DOTNET_VERSION
-    elif command -v yum &> /dev/null; then
-        rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
-        yum install -y dotnet-sdk-$DOTNET_VERSION
-    else
-        handle_error "Unsupported package manager for .NET SDK" "fatal"
-    fi
-    
-    log "${GREEN}.NET SDK installed successfully.${NC}"
-}
-
-# Install ob2 web tool
-install_ob2_web_tool() {
-    log "Installing ob2 web tool..."
-    
-    wget -O /tmp/ob2-web-tool.zip "$OB2_TOOL_URL"
-    unzip /tmp/ob2-web-tool.zip -d /opt/ob2-web-tool
-    chmod +x /opt/ob2-web-tool/install.sh
-    /opt/ob2-web-tool/install.sh
-    
-    log "${GREEN}ob2 web tool installed successfully.${NC}"
 }
 
 # Setup web application
@@ -340,7 +307,7 @@ show_success() {
     echo -e "${GREEN}└────────────────────────────────────────┘${NC}"
     echo -e "\n${CYAN}OB-Web has been successfully installed!${NC}"
     echo -e "\n${YELLOW}Access Information:${NC}"
-    echo -e "  ${BLUE}➤ Web Interface:${NC} https://$DOMAIN"
+    echo -e "  ${BLUE}➤ Web Interface:${NC} https://your-domain"
     echo -e "  ${BLUE}➤ Default Username:${NC} admin"
     echo -e "  ${BLUE}➤ Default Password:${NC} admin"
     echo -e "\n${RED}IMPORTANT: Change the default password after first login!${NC}"
@@ -355,90 +322,25 @@ main() {
     
     show_banner
     
-    echo -e "${YELLOW}Choose installation mode:${NC}"
-    echo -e "${YELLOW}1. Full Installation${NC}"
-    echo -e "${YELLOW}2. Minimal Installation${NC}"
-    echo -e "${YELLOW}3. Custom Installation${NC}"
-    echo -e "${YELLOW}Enter your choice (1/2/3):${NC} "
-    read -r install_mode
+    echo -e "${YELLOW}This will install OB-Web and all its dependencies.${NC}"
+    echo -e "${YELLOW}Do you want to continue? (y/n)${NC} "
+    read -r confirm
+    if [ "$confirm" != "y" ]; then
+        echo -e "${RED}Installation cancelled.${NC}"
+        exit 1
+    fi
     
-    case $install_mode in
-        1)
-            echo -e "\n${CYAN}Starting Full Installation...${NC}\n"
-            check_system_requirements
-            install_dependencies
-            install_dotnet
-            install_ob2_web_tool
-            setup_database
-            setup_redis
-            setup_web_app
-            setup_nginx
-            setup_ssl
-            setup_firewall
-            setup_backup
-            ;;
-        2)
-            echo -e "\n${CYAN}Starting Minimal Installation...${NC}\n"
-            check_system_requirements
-            install_dependencies
-            setup_web_app
-            setup_nginx
-            ;;
-        3)
-            echo -e "\n${CYAN}Starting Custom Installation...${NC}\n"
-            check_system_requirements
-            install_dependencies
-            
-            echo -e "${YELLOW}Do you want to install .NET SDK? (y/n)${NC} "
-            read -r install_dotnet
-            if [ "$install_dotnet" = "y" ]; then
-                install_dotnet
-            fi
-            
-            echo -e "${YELLOW}Do you want to install ob2 web tool? (y/n)${NC} "
-            read -r install_ob2
-            if [ "$install_ob2" = "y" ]; then
-                install_ob2_web_tool
-            fi
-            
-            echo -e "${YELLOW}Do you want to setup the database? (y/n)${NC} "
-            read -r setup_db
-            if [ "$setup_db" = "y" ]; then
-                setup_database
-            fi
-            
-            echo -e "${YELLOW}Do you want to setup Redis? (y/n)${NC} "
-            read -r setup_redis
-            if [ "$setup_redis" = "y" ]; then
-                setup_redis
-            fi
-            
-            setup_web_app
-            setup_nginx
-            
-            echo -e "${YELLOW}Do you want to setup SSL? (y/n)${NC} "
-            read -r setup_ssl
-            if [ "$setup_ssl" = "y" ]; then
-                setup_ssl
-            fi
-            
-            echo -e "${YELLOW}Do you want to setup the firewall? (y/n)${NC} "
-            read -r setup_fw
-            if [ "$setup_fw" = "y" ]; then
-                setup_firewall
-            fi
-            
-            echo -e "${YELLOW}Do you want to setup the backup system? (y/n)${NC} "
-            read -r setup_backup
-            if [ "$setup_backup" = "y" ]; then
-                setup_backup
-            fi
-            ;;
-        *)
-            echo -e "${RED}Invalid choice. Installation aborted.${NC}"
-            exit 1
-            ;;
-    esac
+    echo -e "\n${CYAN}Starting installation...${NC}\n"
+    
+    check_system_requirements
+    install_dependencies
+    setup_database
+    setup_redis
+    setup_web_app
+    setup_nginx
+    setup_ssl
+    setup_firewall
+    setup_backup
     
     show_success
 }
