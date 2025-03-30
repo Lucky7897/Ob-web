@@ -14,7 +14,6 @@ INSTALL_DIR="/opt/ob-web"
 CONFIG_DIR="/etc/ob-web"
 LOG_DIR="/var/log/ob-web"
 DATA_DIR="/var/lib/ob-web"
-BACKUP_DIR="/var/backup/ob-web"
 REPO_URL="https://github.com/Lucky7897/Ob-web"
 
 # Log file setup
@@ -46,11 +45,11 @@ show_banner() {
 ██║   ██║██╔══██╗╚════╝██║███╗██║██╔══╝  ██╔══██╗
 ╚██████╔╝██████╔╝      ╚███╔███╔╝███████╗██████╔╝
  ╚═════╝ ╚═════╝        ╚══╝╚══╝ ╚══════╝╚═════╝ 
-                                                  
-     ╔══════════════════════════════════════╗
-     ║        Created by Lucky7897          ║
-     ║  The Ultimate Web Automation Tool     ║
-     ╚══════════════════════════════════════╝
+
+      ╔══════════════════════════════════════╗
+      ║        Created by Lucky7897          ║
+      ║  The Ultimate Web Automation Tool     ║
+      ╚══════════════════════════════════════╝
 EOF
     echo -e "${PURPLE}Repository: ${REPO_URL}${NC}"
     echo
@@ -85,51 +84,26 @@ check_system_requirements() {
 install_dependencies() {
     log "Installing system dependencies..."
     
-    # Update package lists
+    # Install necessary packages
     if command -v apt-get &> /dev/null; then
-        apt-get update
-        apt-get upgrade -y
         apt-get install -y \
             curl \
             wget \
             git \
             nginx \
-            postgresql \
-            redis-server \
-            certbot \
-            python3-certbot-nginx \
-            python3-pip \
-            python3-venv \
-            supervisor \
-            ufw \
             jq \
-            dotnet-sdk-6.0
+            dotnet-sdk-8.0
     elif command -v yum &> /dev/null; then
-        yum update -y
         yum install -y \
             curl \
             wget \
             git \
             nginx \
-            postgresql-server \
-            postgresql-contrib \
-            redis \
-            certbot \
-            python3-certbot-nginx \
-            python3-pip \
-            python3-venv \
-            supervisor \
-            firewalld \
             jq \
-            dotnet-sdk-6.0
+            dotnet-sdk-8.0
     else
         handle_error "Unsupported package manager" "fatal"
     fi
-    
-    # Install Python packages
-    python3 -m venv /opt/ob-web/venv
-    source /opt/ob-web/venv/bin/activate
-    pip install flask werkzeug pyjwt gunicorn
     
     log "${GREEN}Dependencies installed successfully.${NC}"
 }
@@ -206,116 +180,6 @@ EOF
     log "${GREEN}NGINX setup completed.${NC}"
 }
 
-# Setup SSL
-setup_ssl() {
-    log "Setting up SSL..."
-    
-    echo -e "${YELLOW}Enter your domain name (leave empty for self-signed certificate):${NC} "
-    read -r DOMAIN
-    
-    if [ -n "$DOMAIN" ]; then
-        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "admin@$DOMAIN"
-    else
-        mkdir -p /etc/ssl/ob-web
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout /etc/ssl/ob-web/private.key \
-            -out /etc/ssl/ob-web/certificate.crt \
-            -subj "/CN=ob-web"
-            
-        sed -i "s/listen 80;/listen 443 ssl;\n    ssl_certificate \/etc\/ssl\/ob-web\/certificate.crt;\n    ssl_certificate_key \/etc\/ssl\/ob-web\/private.key;/" \
-            /etc/nginx/sites-available/ob-web
-    fi
-    
-    log "${GREEN}SSL setup completed.${NC}"
-}
-
-# Setup firewall
-setup_firewall() {
-    log "Setting up firewall..."
-    
-    if command -v ufw &> /dev/null; then
-        ufw allow 80/tcp
-        ufw allow 443/tcp
-        ufw allow 5000/tcp
-        ufw --force enable
-    elif command -v firewall-cmd &> /dev/null; then
-        firewall-cmd --permanent --add-service=http
-        firewall-cmd --permanent --add-service=https
-        firewall-cmd --permanent --add-port=5000/tcp
-        firewall-cmd --reload
-    fi
-    
-    log "${GREEN}Firewall setup completed.${NC}"
-}
-
-# Setup PostgreSQL database
-setup_database() {
-    log "Setting up PostgreSQL database..."
-    
-    if command -v systemctl &> /dev/null; then
-        systemctl enable postgresql
-        systemctl start postgresql
-    else
-        service postgresql start
-    fi
-    
-    # Create database and user
-    sudo -u postgres psql -c "CREATE DATABASE obweb;"
-    sudo -u postgres psql -c "CREATE USER obweb WITH ENCRYPTED PASSWORD 'obweb';"
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE obweb TO obweb;"
-    
-    log "${GREEN}Database setup completed.${NC}"
-}
-
-# Setup Redis
-setup_redis() {
-    log "Setting up Redis..."
-    
-    if command -v systemctl &> /dev/null; then
-        systemctl enable redis-server
-        systemctl start redis-server
-    else
-        service redis-server start
-    fi
-    
-    sed -i 's/# maxmemory-policy noeviction/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
-    sed -i 's/# maxmemory <bytes>/maxmemory 2gb/' /etc/redis/redis.conf
-    
-    log "${GREEN}Redis setup completed.${NC}"
-}
-
-# Setup backup system
-setup_backup() {
-    log "Setting up backup system..."
-    
-    mkdir -p "$BACKUP_DIR"
-    
-    cat > /usr/local/bin/ob-web-backup << EOF
-#!/bin/bash
-BACKUP_DATE=\$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/ob-web_\$BACKUP_DATE.tar.gz"
-
-# Backup database
-pg_dump obweb > "$BACKUP_DIR/db_backup_\$BACKUP_DATE.sql"
-
-# Backup configuration and data
-tar -czf \$BACKUP_FILE \\
-    "$CONFIG_DIR" \\
-    "$DATA_DIR" \\
-    "$BACKUP_DIR/db_backup_\$BACKUP_DATE.sql"
-
-# Remove old backups (keep last 7 days)
-find "$BACKUP_DIR" -name "ob-web_*.tar.gz" -mtime +7 -delete
-find "$BACKUP_DIR" -name "db_backup_*.sql" -mtime +7 -delete
-EOF
-    
-    chmod +x /usr/local/bin/ob-web-backup
-    
-    echo "0 0 * * * root /usr/local/bin/ob-web-backup" > /etc/cron.d/ob-web-backup
-    
-    log "${GREEN}Backup system setup completed.${NC}"
-}
-
 # Show success message
 show_success() {
     echo -e "\n${GREEN}┌────────────────────────────────────────┐${NC}"
@@ -351,14 +215,9 @@ main() {
     
     check_system_requirements
     install_dependencies
-    setup_database
-    setup_redis
     setup_dotnet_app
     setup_web_app
     setup_nginx
-    setup_ssl
-    setup_firewall
-    setup_backup
     
     show_success
 }
